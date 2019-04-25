@@ -739,28 +739,53 @@ static int hasht_remove(struct hasht *ht, hasht_key_type *key) {
     long next_idx = hasht_idx_mod_buckets(ht, found_idx + 1); //this assumes linear probing
     struct hasht_pair_type *next_pair = ht->tab + next_idx;
     //TODO, division even though it is fast can be optimized to be a branch in wrap around cases
+    //After benchmarking this, the results were: cleaning up in general made things faster by 2.0%
+    //HASHT_AGRESSIVE_CLEANUP made things faster by about 0.5% (which is insignificant)
     if (hasht_pr_is_empty(next_pair)) {
         hasht_mark_as_empty__(ht, found_idx);
-        long supposed_to_be_in_idx = hasht_integer_mod_buckets(ht, full_hash);
-        long probe_len = found_idx - supposed_to_be_in_idx;
-        if (probe_len < 0)
-            probe_len = probe_len + ht->nbuckets;
 
         //^TODO: add tests that extensively test the table state after lots of deletions
-        // what was                 [deleted] [deleted] [deleted] [filled] [empty]
+        //what was                  [deleted] [deleted] [deleted] [filled] [empty]
         //becomes:                  [deleted] [deleted] [deleted] [empty]  [empty]
         //                          [deleted] [deleted] [empty]   [empty]  [empty]
         //                          [deleted] [empty]   [empty]   [empty]  [empty]
         //                          [empty]   [empty]   [empty]   [empty]  [empty]
         //this an attempt to speed up searches after deletions
-        long prev_idx = hasht_idx_mod_buckets(ht, found_idx - 1);
-        struct hasht_pair_type *prev_pair = ht->tab + prev_idx;
-        for (long i = 0; i < probe_len && hasht_pr_is_deleted(prev_pair); i++) {
-            hasht_mark_as_empty__(ht, prev_idx);
-            HASHT_ASSERT(hasht_pr_is_empty(prev_pair), "");
-            prev_idx = hasht_idx_mod_buckets(ht, prev_idx - 1); 
-            prev_pair = ht->tab + prev_idx;
+        
+        //this used to be a while loop, and it also would've been correct, but then i "fixed it" thinking it was a bug
+        //even though it wasn't, it's more effective for it to be a while loop, in order to 'help' other keys too
+        //but having it like this would improve consistency, i might revert it to the previous approach, if benchmarks suggest this.
+        //Update: both approaches can be enabled by a define, the older approach was slightly better, and it's enabled by default
+        //                          [deleted] [deleted] [deleted] [filled]                      [empty] [filled] [empty] [deleted]
+        //                               ^        ^       ^         ^the item we just deleted    ^        ^^^dont care^^^^^^^^^^
+        //                               ^^^^^^^^^^^^^^^^^^^                                     ^must be empty
+        //                             ^^^^it doesnt matter to what hashes those keys were originally from (their probe length)
+        //                             ^^^^as long as they're deleted (And followd by an empty bucket)
+        //                             ^^^^we can mark them empty
+        #define HASHT_AGRESSIVE_CLEANUP
+        #ifdef HASHT_AGRESSIVE_CLEANUP
+            long prev_idx = hasht_idx_mod_buckets(ht, found_idx - 1);
+            struct hasht_pair_type *prev_pair = ht->tab + prev_idx;
+            while (hasht_pr_is_deleted(prev_pair)) {
+                hasht_mark_as_empty__(ht, prev_idx);
+                HASHT_ASSERT(hasht_pr_is_empty(prev_pair), "");
+                prev_idx = hasht_idx_mod_buckets(ht, prev_idx - 1); 
+                prev_pair = ht->tab + prev_idx;
         }
+        #else
+            long supposed_to_be_in_idx = hasht_integer_mod_buckets(ht, full_hash);
+            long probe_len = found_idx - supposed_to_be_in_idx;
+            if (probe_len < 0)
+                probe_len = probe_len + ht->nbuckets;
+            long prev_idx = hasht_idx_mod_buckets(ht, found_idx - 1);
+            struct hasht_pair_type *prev_pair = ht->tab + prev_idx;
+            for (long i = 0; i < probe_len && hasht_pr_is_deleted(prev_pair); i++) {
+                hasht_mark_as_empty__(ht, prev_idx);
+                HASHT_ASSERT(hasht_pr_is_empty(prev_pair), "");
+                prev_idx = hasht_idx_mod_buckets(ht, prev_idx - 1); 
+                prev_pair = ht->tab + prev_idx;
+            }
+        #endif // HASHT_AGRESSIVE_CLEANUP
     }
     else {
         hasht_mark_as_deleted__(ht, found_idx);
