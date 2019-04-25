@@ -353,7 +353,6 @@ static void hasht_memset(struct hasht *ht, long begin_inc, long end_exc) {
     //the flags are designed so that memsetting with 0 means: empty, not deleted, not corrupt
     memset(ht->tab + begin_inc, 0, sizeof(struct hasht_pair_type) * end_exc - begin_inc);
     HASHT_ASSERT(hasht_check(ht, begin_inc, end_exc, 1, -1, -1), "hasht corrupt or not initialized");
-    hasht_dbg_sanity_heavy(ht);
 }
 
 static int hasht_init_ex(struct hasht *ht,

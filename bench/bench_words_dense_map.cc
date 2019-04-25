@@ -1,10 +1,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "../strhash/superfasthash.h"
-#include "../data/words.h"
-#include "../util.h" //fast rand
-#include "timer.h" //only works in linux
+#include "../third_party/strhash/superfasthash.h"
+#include "../third_party/data/words.h"
+#include "util.h" //fast rand, timer, (timer only works in linux)
 
 #include <cassert>
 #include <functional>
@@ -15,10 +14,13 @@ constexpr const char *empty_key = NULL;
 constexpr const char *del_key = reinterpret_cast<const char *>(1);
 
 static bool streqcmp(const char *key_1, const char *key_2) {
-    if (key_1 == key_2)
+    if (key_1 == key_2) {
         return true;
-    else if (key_1 == empty_key || key_2 == empty_key || key_1 == del_key || key_2 == del_key) //we need this, otherwise the thing segfaults
+    }
+    else if (key_1 == empty_key || key_2 == empty_key || key_1 == del_key || key_2 == del_key) {
+        //we need this, otherwise the thing segfaults
         return false;
+    }
     return strcmp(key_1, key_2) == 0;
 }
 

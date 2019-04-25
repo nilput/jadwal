@@ -1,10 +1,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "../strhash/superfasthash.h"
-#include "../data/words.h"
-#include "../util.h" //fast rand
-#include "timer.h" //only works in linux
+#include "../third_party/strhash/superfasthash.h"
+#include "../third_party/data/words.h"
+#include "util.h" //fast rand, timer, (timer only works in linux)
 
 #include <cassert>
 #include <unordered_map>
