@@ -1,7 +1,7 @@
 #ifndef UTILH
 #define UTILH
 
-#include <unistd.h> //timer works on linux (not posix)
+#include <unistd.h> 
 #include <time.h> 
 
 

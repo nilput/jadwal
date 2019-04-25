@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include "../third_party/strhash/superfasthash.h"
 #include "../third_party/data/words.h"
-#include "util.h" //fast rand, timer, (timer only works in linux)
+#include "util.h" //fast rand, timer
 
 #include <cassert>
 #include <functional>

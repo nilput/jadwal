@@ -86,9 +86,6 @@ static int get_adiv_power_idx(size_t at_least) {
 //long is used for all lengths / sizes
 
 
-
-
-
 struct hasht_pair_type {
     //bits:
     //[0...8]  flags
@@ -99,7 +96,6 @@ struct hasht_pair_type {
 };
 
 //pair type functions
-//
 static unsigned char hasht_pr_flags(struct hasht_pair_type *prt) {
     return prt->pair_data & 0xFF;
 }
@@ -123,7 +119,6 @@ static void hasht_pr_set_flags(struct hasht_pair_type *prt, unsigned char flags)
 }
 
 
-//
 //[is_deleted] [is_not_empty]
 //     0            0          empty
 //     0            1          occupied
@@ -148,13 +143,10 @@ static bool hasht_pr_is_occupied(struct hasht_pair_type *prt) {
     return !hasht_pr_is_empty(prt) && !hasht_pr_is_deleted(prt); 
 }
 
-
 typedef void * (*hasht_malloc_fptr)(size_t sz, void *userdata);
 typedef void * (*hasht_realloc_fptr)(void *ptr, size_t sz, void *userdata);
 typedef void (*hasht_free_fptr)(void *ptr, void *userdata);
 
-
-//boring code, deals with allocators
 struct hasht_alloc_funcs {
     hasht_malloc_fptr alloc;
     hasht_realloc_fptr realloc;
@@ -173,8 +165,6 @@ static void  hasht_def_free(void *ptr, void *unused_userdata_) {
     (void) unused_userdata_;
     free(ptr); 
 }
-//end of boring code
-
 
 enum HASHT_ERR {
     HASHT_OK,
@@ -182,10 +172,10 @@ enum HASHT_ERR {
     HASHT_INVALID_REQ_SZ,
     HASHT_FAILED_AT_RESIZE,
 
-
     HASHT_NOT_FOUND = -1, 
     HASHT_DUPLICATE_KEY = -2,
-    HASHT_RESIZE_REFUSE = -3, //the table refused to change the size, becuase it thinks it's smart and there's no need, this can be forced though
+    //the table refused to change the size, becuase it thinks it's smart and there's no need, this can be forced though (WIP)
+    HASHT_RESIZE_REFUSE = -3, 
     HASHT_ITER_STOP = -4,
     HASHT_ITER_FIRST = -5,
 
@@ -194,8 +184,9 @@ enum HASHT_ERR {
 
 struct hasht {
     struct hasht_pair_type *tab;
+    adiv_fptr div_func; //a pointer to a function that does fast division
 
-    long nelements;
+    long nelements; //number of active buckets (ones that are not empty, and not deleted)
     long ndeleted;
     long nbuckets;
     long nbuckets_po2; //power of two
@@ -203,7 +194,6 @@ struct hasht {
     long shrink_at_percentage; 
     long grow_at_gt_n;  //saved result of computation
     long shrink_at_lt_n; 
-    adiv_fptr div_func; //a pointer to a function that does fast division
     struct hasht_alloc_funcs memfuncs;
 };
 
@@ -299,7 +289,6 @@ static int hasht_change_sz_field(struct hasht *ht, long nbuckets, bool force) {
     HASHT_ASSERT(ht->div_func(rnd) == rnd % ht->nbuckets, "adiv failed");
 #endif// HASHT_DBG
     
-
     HASHT_ASSERT(ht->shrink_at_percentage > 0 && ht->grow_at_percentage > ht->shrink_at_percentage, "invalid growth parameters");
     //update cached result of division
     hasht_set_parameters(ht, ht->shrink_at_percentage, ht->grow_at_percentage);
@@ -314,8 +303,8 @@ static void hasht_zero_sz_field(struct hasht *ht) {
 //tries to find memory corruption
 //flags are flags to consider a failure
 //for the three query* ints, 0 means i dont care, 1 expect it to be, -1 means expect it to be not
-//for example hasht_check(ht, 0, ht->nbuckets, 0, 0, -1) -> fail if any are corrupt
-static bool hasht_check(struct hasht *ht, long beg_idx, long end_idx, int query_empty, int query_deleted, int query_corrupt) {
+//for example hasht_dbg_check(ht, 0, ht->nbuckets, 0, 0, -1) -> fail if any are corrupt
+static bool hasht_dbg_check(struct hasht *ht, long beg_idx, long end_idx, int query_empty, int query_deleted, int query_corrupt) {
     long len = end_idx - beg_idx;
     for (int i=0; i<len; i++) {
         struct hasht_pair_type *pair = ht->tab + i + beg_idx;
@@ -345,14 +334,14 @@ static bool hasht_dbg_sanity_01(struct hasht *ht) {
            ht->div_func;
 }
 static bool hasht_dbg_sanity_heavy(struct hasht *ht) {
-    return hasht_dbg_sanity_01(ht) && hasht_check(ht, 0, ht->nbuckets, 0, 0, -1);
+    return hasht_dbg_sanity_01(ht) && hasht_dbg_check(ht, 0, ht->nbuckets, 0, 0, -1);
 }
 
 static void hasht_memset(struct hasht *ht, long begin_inc, long end_exc) {
     HASHT_ASSERT(hasht_dbg_sanity_01(ht), "hasht corrupt or not initialized");
     //the flags are designed so that memsetting with 0 means: empty, not deleted, not corrupt
-    memset(ht->tab + begin_inc, 0, sizeof(struct hasht_pair_type) * end_exc - begin_inc);
-    HASHT_ASSERT(hasht_check(ht, begin_inc, end_exc, 1, -1, -1), "hasht corrupt or not initialized");
+    memset(ht->tab + begin_inc, 0, sizeof(struct hasht_pair_type) * (end_exc - begin_inc));
+    HASHT_ASSERT(hasht_dbg_check(ht, begin_inc, end_exc, 1, -1, -1), "");
 }
 
 static int hasht_init_ex(struct hasht *ht,
@@ -382,7 +371,6 @@ static int hasht_init_ex(struct hasht *ht,
     rv = hasht_change_sz_field(ht, initial_nbuckets, false);
     if (rv != HASHT_OK)
         return rv;
-
 
     ht->tab = ht->memfuncs.alloc(sizeof(struct hasht_pair_type) * ht->nbuckets, ht->memfuncs.userdata);
     if (!ht->tab)
@@ -429,18 +417,14 @@ static long hasht_integer_mod_buckets(struct hasht *ht, size_t full_hash) {
     return divd_hash;
 }
 
-
 //precondition: idx can only be in [-1...nbuckets] (inclusive both ends)
 static long hasht_idx_mod_buckets(struct hasht *ht, long idx) {
+    HASHT_ASSERT(idx >= -1 && idx <= ht->nbuckets, "");
     if (idx < 0)
         return ht->nbuckets - 1;
     if (idx >= ht->nbuckets)
         return 0;
     return idx;
-}
-static long hasht_do_hash_key_get_mod_buckets(struct hasht *ht, hasht_key_type *key) {
-    long key_hash = hasht_hash(key);
-    return hasht_integer_mod_buckets(ht, key_hash);
 }
 
 static long hasht_n_unused_buckets(struct hasht *ht) {
@@ -457,11 +441,6 @@ static long hasht_n_used_buckets(struct hasht *ht) {
     return ht->nelements;
 }
 
-struct hasht_query_result {
-    long found_at;
-    long can_be_inserted_at; //internal use field
-};
-
 //returns 0 if equal
 static int hasht_cmp(struct hasht *ht, hasht_key_type *key1, unsigned int partial_hash_1, struct hasht_pair_type *pair) {
     (void) ht;
@@ -475,9 +454,8 @@ static int hasht_cmp(struct hasht *ht, hasht_key_type *key1, unsigned int partia
     return hasht_key_eq_cmp(key1, &pair->key);
 }
 
-//on successful find return HASHT_OK
-//otherwise unless an error occurs it returns NOT_FOUND 
-//if NOT_FOUND then out_idx holds a suggested place to insert 
+//on successful match, returns HASHT_OK
+//otherwise unless an error occurs it returns NOT_FOUND and out_idx will hold a suggested place to insert 
 //if we have no suggested place then out_idx is set to NOT_FOUND too
 static inline int hasht_find_pos__(struct hasht *ht, hasht_key_type *key, long *out_idx, size_t *full_hash_out) {
     HASHT_ASSERT(out_idx && full_hash_out, "");
@@ -518,7 +496,6 @@ static inline int hasht_find_pos__(struct hasht *ht, hasht_key_type *key, long *
         idx = hasht_idx_mod_buckets(ht, idx + 1); //this is where we can change linear probing
     }
 
-
 second_loop:
     //same exact loop as above, but without checking the case of finding deleted elements (attempt at optimization)
     while (1) {
@@ -528,8 +505,7 @@ second_loop:
             return HASHT_OK; //found
         }
         else if (hasht_pr_is_empty(pair)) {
-            if (suggested == HASHT_NOT_FOUND)
-                suggested = idx;
+            HASHT_ASSERT(suggested != HASHT_NOT_FOUND, "invalid pair state");
             *out_idx = suggested;
             return HASHT_NOT_FOUND;
         }
@@ -539,7 +515,6 @@ second_loop:
     *out_idx = HASHT_NOT_FOUND;
     return HASHT_INVALID_TABLE_STATE;
 }
-
 
 //fwddecl
 static int hasht_init_copy_settings(struct hasht *ht, long initial_nelements, const struct hasht *source);
@@ -553,7 +528,6 @@ static bool hasht_index_within(long start_idx, long cursor_idx, long end_idx_inc
     return true;
 }
 //returns a negative value if it finds none
-//this function is likely broken
 //in first iteration cursor_idx must be HASHT_ITER_FIRST, this is used to tell the difference between whether we wrapped around or not
 static long hasht_skip_to_next__(struct hasht *ht, long start_idx, long cursor_idx, long end_idx_inclusive) {
     if (ht->nelements == 0) {
@@ -600,7 +574,6 @@ static int hasht_copy_all_to(struct hasht *destination, struct hasht *source) {
 }
 
 static int hasht_resize__(struct hasht *ht, long new_element_count) {
-    int rv;
 
     long new_bucket_count = hasht_calc_nelements_to_nbuckets(new_element_count, ht->shrink_at_percentage, ht->grow_at_percentage);
     if (ht->nbuckets_po2 == get_adiv_power_idx(new_bucket_count)) {
@@ -611,7 +584,7 @@ static int hasht_resize__(struct hasht *ht, long new_element_count) {
     HASHT_ASSERT(new_bucket_count > HASHT_MIN_TABLESIZE, "");
 
     struct hasht new_ht;
-    rv = hasht_init_copy_settings(&new_ht, new_bucket_count, ht);
+    int rv = hasht_init_copy_settings(&new_ht, new_bucket_count, ht);
     if (rv != HASHT_OK) {
         return rv;
     }
@@ -628,7 +601,6 @@ static int hasht_resize__(struct hasht *ht, long new_element_count) {
     memcpy(ht, &new_ht, sizeof *ht);
 
     HASHT_ASSERT(hasht_dbg_sanity_heavy(ht), "");
-
 
     return HASHT_OK;
 }
@@ -666,7 +638,6 @@ static int hasht_set_pair_at_pos__(struct hasht *ht, size_t full_hash, hasht_key
     return HASHT_OK;
 }
 
-
 static int hasht_insert__(struct hasht *ht, hasht_key_type *key, hasht_value_type *value, long *found_idx_out, bool or_replace) {
     HASHT_ASSERT(hasht_dbg_sanity_01(ht), "hasht corrupt or not initialized");
     HASHT_ASSERT(ht->nelements < ht->nbuckets, "");
@@ -680,7 +651,6 @@ static int hasht_insert__(struct hasht *ht, hasht_key_type *key, hasht_value_typ
         else
             return HASHT_FAILED_AT_RESIZE;
     }
-
 
     size_t full_hash;
     rv = hasht_find_pos__(ht, key, &found_idx, &full_hash);
@@ -747,7 +717,7 @@ static void hasht_mark_as_deleted__(struct hasht *ht, long at_index) {
     HASHT_ASSERT(hasht_pr_is_deleted(pair), "");
 }
 
-static int hasht_remove_element__(struct hasht *ht, hasht_key_type *key) {
+static int hasht_remove(struct hasht *ht, hasht_key_type *key) {
     long found_idx;
     size_t full_hash_unused;
     int rv = hasht_find_pos__(ht, key, &found_idx, &full_hash_unused);
@@ -771,12 +741,12 @@ static int hasht_remove_element__(struct hasht *ht, hasht_key_type *key) {
     //TODO, division even though it is fast can be optimized to be a branch in wrap around cases
     if (hasht_pr_is_empty(next_pair)) {
         hasht_mark_as_empty__(ht, found_idx);
-        //'domino effect':          [deleted] [deleted] [deleted] [filled] [empty]
+        // what was                 [deleted] [deleted] [deleted] [filled] [empty]
         //becomes:                  [deleted] [deleted] [deleted] [empty]  [empty]
         //                          [deleted] [deleted] [empty]   [empty]  [empty]
         //                          [deleted] [empty]   [empty]   [empty]  [empty]
         //                          [empty]   [empty]   [empty]   [empty]  [empty]
-        //my hypothesis is that this speeds up searches
+        //this an attempt to speed up searches after deletions
         long prev_idx = hasht_idx_mod_buckets(ht, found_idx - 1);
         struct hasht_pair_type *prev_pair = ht->tab + prev_idx;
         while (hasht_pr_is_deleted(prev_pair)) {
@@ -794,10 +764,6 @@ static int hasht_remove_element__(struct hasht *ht, hasht_key_type *key) {
     ht->nelements--;
     return HASHT_OK;
 }
-static int hasht_remove(struct hasht *ht, hasht_key_type *key) {
-    //TODO: why 2 funcs?
-    return hasht_remove_element__(ht, key);
-}
 static int hasht_insert(struct hasht *ht, hasht_key_type *key, hasht_value_type *value) {
     long idx_unused;
     int rv = hasht_insert__(ht, key, value, &idx_unused, false /*dont replace*/);
@@ -806,8 +772,9 @@ static int hasht_insert(struct hasht *ht, hasht_key_type *key, hasht_value_type 
 struct hasht_iter {
     long started_at_idx;
     long current_idx;
-    //current value
-    struct hasht_pair_type *pair;
+    //public field
+    //the two members: pair->key and pair->value can be accessed directly (assuming a valid iterator)
+    struct hasht_pair_type *pair; 
 };
 static struct hasht_iter hasht_mk_invalid_iter(void) {
     struct hasht_iter iter = {HASHT_ITER_STOP, HASHT_ITER_STOP, NULL};
