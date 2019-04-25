@@ -10,14 +10,14 @@
 #include <sparsehash/dense_hash_map>
 using google::dense_hash_map;
 
-constexpr const char *empty_key = NULL;
-constexpr const char *del_key = reinterpret_cast<const char *>(1);
+#define SP_EMPTY_KEY (NULL)
+#define SP_DEL_KEY (reinterpret_cast<const char *>(1))
 
 static bool streqcmp(const char *key_1, const char *key_2) {
     if (key_1 == key_2) {
         return true;
     }
-    else if (key_1 == empty_key || key_2 == empty_key || key_1 == del_key || key_2 == del_key) {
+    else if (key_1 == SP_EMPTY_KEY || key_2 == SP_EMPTY_KEY || key_1 == SP_DEL_KEY || key_2 == SP_DEL_KEY) {
         //we need this, otherwise the thing segfaults
         return false;
     }
@@ -35,8 +35,8 @@ int main(void) {
                         std::function<bool (const char *, const char *)> 
                         > maptype;
     maptype hashtable(0, hashwrap, streqcmp);
-    hashtable.set_empty_key(NULL);
-    hashtable.set_deleted_key(reinterpret_cast<const char *>(1));
+    hashtable.set_empty_key(SP_EMPTY_KEY);
+    hashtable.set_deleted_key(SP_DEL_KEY);
 
     struct timer_info tm_init;
     struct timer_info tm_tmp;

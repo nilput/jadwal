@@ -719,8 +719,8 @@ static void hasht_mark_as_deleted__(struct hasht *ht, long at_index) {
 
 static int hasht_remove(struct hasht *ht, hasht_key_type *key) {
     long found_idx;
-    size_t full_hash_unused;
-    int rv = hasht_find_pos__(ht, key, &found_idx, &full_hash_unused);
+    size_t full_hash;
+    int rv = hasht_find_pos__(ht, key, &found_idx, &full_hash);
     if (rv == HASHT_NOT_FOUND) {
         return rv;
     }
@@ -741,6 +741,12 @@ static int hasht_remove(struct hasht *ht, hasht_key_type *key) {
     //TODO, division even though it is fast can be optimized to be a branch in wrap around cases
     if (hasht_pr_is_empty(next_pair)) {
         hasht_mark_as_empty__(ht, found_idx);
+        long supposed_to_be_in_idx = hasht_integer_mod_buckets(ht, full_hash);
+        long probe_len = found_idx - supposed_to_be_in_idx;
+        if (probe_len < 0)
+            probe_len = probe_len + ht->nbuckets;
+
+        //^TODO: add tests that extensively test the table state after lots of deletions
         // what was                 [deleted] [deleted] [deleted] [filled] [empty]
         //becomes:                  [deleted] [deleted] [deleted] [empty]  [empty]
         //                          [deleted] [deleted] [empty]   [empty]  [empty]
@@ -749,7 +755,7 @@ static int hasht_remove(struct hasht *ht, hasht_key_type *key) {
         //this an attempt to speed up searches after deletions
         long prev_idx = hasht_idx_mod_buckets(ht, found_idx - 1);
         struct hasht_pair_type *prev_pair = ht->tab + prev_idx;
-        while (hasht_pr_is_deleted(prev_pair)) {
+        for (long i = 0; i < probe_len && hasht_pr_is_deleted(prev_pair); i++) {
             hasht_mark_as_empty__(ht, prev_idx);
             HASHT_ASSERT(hasht_pr_is_empty(prev_pair), "");
             prev_idx = hasht_idx_mod_buckets(ht, prev_idx - 1); 
