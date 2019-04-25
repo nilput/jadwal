@@ -3,4 +3,4 @@ CXXFLAGS := -O2 -Wall -Wextra
 .PHONY: all clean
 all: bench/bench_words_dense_map bench/bench_sentence_dense_map
 clean: 
-	rm bench/bench_words_dense_map
+	rm bench/bench_words_dense_map bench/bench_sentence_dense_map

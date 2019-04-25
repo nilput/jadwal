@@ -745,6 +745,16 @@ static int hasht_remove(struct hasht *ht, hasht_key_type *key) {
         hasht_mark_as_empty__(ht, found_idx);
 
         //^TODO: add tests that extensively test the table state after lots of deletions
+        //
+        //when we have the situation:
+        //                          [deleted] [deleted] [deleted] [filled]                      [empty] [filled] [empty] [deleted]
+        //                               ^        ^       ^         ^the item we just deleted    ^        ^^^dont care^^^^^^^^^^
+        //                               ^^^^^^^^^^^^^^^^^^^                                     ^must be empty
+        //                             ^^^^it doesn't matter to what hashes those keys were originally from (their probe length)
+        //                             ^^^^as long as they're deleted (And followd by an empty bucket)
+        //                             ^^^^we can mark them empty
+        //
+        //
         //what was                  [deleted] [deleted] [deleted] [filled] [empty]
         //becomes:                  [deleted] [deleted] [deleted] [empty]  [empty]
         //                          [deleted] [deleted] [empty]   [empty]  [empty]
@@ -752,16 +762,6 @@ static int hasht_remove(struct hasht *ht, hasht_key_type *key) {
         //                          [empty]   [empty]   [empty]   [empty]  [empty]
         //this an attempt to speed up searches after deletions
         
-        //this used to be a while loop, and it also would've been correct, but then i "fixed it" thinking it was a bug
-        //even though it wasn't, it's more effective for it to be a while loop, in order to 'help' other keys too
-        //but having it like this would improve consistency, i might revert it to the previous approach, if benchmarks suggest this.
-        //Update: both approaches can be enabled by a define, the older approach was slightly better, and it's enabled by default
-        //                          [deleted] [deleted] [deleted] [filled]                      [empty] [filled] [empty] [deleted]
-        //                               ^        ^       ^         ^the item we just deleted    ^        ^^^dont care^^^^^^^^^^
-        //                               ^^^^^^^^^^^^^^^^^^^                                     ^must be empty
-        //                             ^^^^it doesnt matter to what hashes those keys were originally from (their probe length)
-        //                             ^^^^as long as they're deleted (And followd by an empty bucket)
-        //                             ^^^^we can mark them empty
         #define HASHT_AGRESSIVE_CLEANUP
         #ifdef HASHT_AGRESSIVE_CLEANUP
             long prev_idx = hasht_idx_mod_buckets(ht, found_idx - 1);
@@ -771,7 +771,7 @@ static int hasht_remove(struct hasht *ht, hasht_key_type *key) {
                 HASHT_ASSERT(hasht_pr_is_empty(prev_pair), "");
                 prev_idx = hasht_idx_mod_buckets(ht, prev_idx - 1); 
                 prev_pair = ht->tab + prev_idx;
-        }
+            }
         #else
             long supposed_to_be_in_idx = hasht_integer_mod_buckets(ht, full_hash);
             long probe_len = found_idx - supposed_to_be_in_idx;

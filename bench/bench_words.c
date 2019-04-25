@@ -29,13 +29,13 @@ static int hasht_key_eq_cmp(hasht_key_type *key_1, hasht_key_type *key_2) {
 int main(void) {
     struct hasht ht;
     int rv = hasht_init(&ht, 0);
+    assert(rv == HASHT_OK);
 
     struct timer_info tm_init;
     struct timer_info tm_tmp;
     timer_begin(&tm_init);
     timer_begin(&tm_tmp);
 
-    assert(rv == HASHT_OK);
     for (int i=0; i<nwords; i++) {
         int rv = hasht_insert(&ht, &words[i], &i);
         assert(rv == HASHT_OK);
