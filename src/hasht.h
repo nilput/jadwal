@@ -268,7 +268,7 @@ static long hasht_calc_nelements_to_nbuckets(long needed_nelements, long shrink_
     return needed_nbuckets;
 }
 
-//this is not very trivial, two fields are tied to each other and they need to be consistent
+//this is not very trivial, multiple fields are tied to each other and they need to be consistent
 //if this fails it doesnt change the field
 static int hasht_change_sz_field(struct hasht *ht, long nbuckets, bool force) {
     (void) force;
@@ -463,7 +463,7 @@ static inline int hasht_find_pos__(struct hasht *ht, hasht_key_type *key, long *
     unsigned int partial_hash = hasht_hash_to_partial_hash(full_hash);
     *full_hash_out = full_hash;
     long idx = hasht_integer_mod_buckets(ht, full_hash);
-    long suggested = HASHT_NOT_FOUND;
+    long suggested = HASHT_NOT_FOUND; //suggest where to insert
 
     if (hasht_n_empty_buckets(ht) < 1) {
         //note that if hasht_n_unused_buckets is anywhere near one it'll be a very a slow search anyways
@@ -474,9 +474,15 @@ static inline int hasht_find_pos__(struct hasht *ht, hasht_key_type *key, long *
     //we can probably use an upper iteration count, in case there is corruption, but we just ignore that here, we assume the user is sane
     while (1) {
         struct hasht_pair_type *pair = ht->tab + idx;
-        if (hasht_pr_is_deleted(pair)) {
-            suggested = idx; //suggest where to insert
-            goto second_loop;
+        if (hasht_pr_is_occupied(pair)) {
+            if (hasht_cmp(ht, key, partial_hash, pair) == 0) {
+                *out_idx = idx;
+                return HASHT_OK; //found
+            }
+        }
+        else if (hasht_pr_is_deleted(pair)) {
+            if (suggested == HASHT_NOT_FOUND)
+                suggested = idx; 
         }
         else if (hasht_pr_is_empty(pair)) {
             if (suggested == HASHT_NOT_FOUND)
@@ -484,33 +490,14 @@ static inline int hasht_find_pos__(struct hasht *ht, hasht_key_type *key, long *
             *out_idx = suggested;
             return HASHT_NOT_FOUND;
         }
-        else if (hasht_pr_is_occupied(pair) && hasht_cmp(ht, key, partial_hash, pair) == 0) {
-            *out_idx = idx;
-            return HASHT_OK; //found
-        }
 #ifdef HASHT_DBG
-        else if (!hasht_pr_is_occupied(pair)){
-            HASHT_ASSERT(false, "invalid pair state");
+        else {
+            HASHT_ASSERT(false, "invalid bucket state");
         }
 #endif
         idx = hasht_idx_mod_buckets(ht, idx + 1); //this is where we can change linear probing
     }
 
-second_loop:
-    //same exact loop as above, but without checking the case of finding deleted elements (attempt at optimization)
-    while (1) {
-        struct hasht_pair_type *pair = ht->tab + idx;
-        if (hasht_pr_is_occupied(pair) && hasht_cmp(ht, key, partial_hash, pair) == 0) {
-            *out_idx = idx;
-            return HASHT_OK; //found
-        }
-        else if (hasht_pr_is_empty(pair)) {
-            HASHT_ASSERT(suggested != HASHT_NOT_FOUND, "invalid pair state");
-            *out_idx = suggested;
-            return HASHT_NOT_FOUND;
-        }
-        idx = hasht_idx_mod_buckets(ht, idx + 1); //this is where we can change linear probing
-    }
     //unreachable
     *out_idx = HASHT_NOT_FOUND;
     return HASHT_INVALID_TABLE_STATE;
