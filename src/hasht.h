@@ -30,8 +30,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /*
 needed functions that should be defined before including this: 
-    int hasht_key_cmp(hasht_key_type *key_1, hasht_key_type *key_2) (returns 0 if equal)
-    size_t hasht_hash(hasht_value_type *value)
+    int hasht_key_eq_cmp(hasht_key_type *key_1, hasht_key_type *key_2) (returns 0 if equal)
+    size_t hasht_hash(hasht_key_type *key)
 needed typedefs: 
      typedef <type> hasht_key_type; 
      typedef <type> hasht_value_type; 
@@ -53,11 +53,12 @@ needed typedefs:
 #define HASHT_H
 
 #include <stdlib.h> //malloc, free
+#include <stdbool.h> 
 #include <string.h> //memset, memcpy, ...
 #include "div_32_funcs.h" //divison functions
 
 
-static int get_adiv_power_idx(size_t at_least) {
+static int hasht_get_adiv_power_idx(size_t at_least) {
     //starts at 2
     for (int i=2; i < (int)adiv_n_values; i++) {
         if (adiv_values[i] >= at_least) 
@@ -190,10 +191,10 @@ struct hasht {
     long ndeleted;
     long nbuckets;
     long nbuckets_po2; //power of two
-    long grow_at_percentage; // (divide by 100, for example 0.50 is 50)
-    long shrink_at_percentage; 
     long grow_at_gt_n;  //saved result of computation
     long shrink_at_lt_n; 
+    long grow_at_percentage; // (divide by 100, for example 0.50 is 50)
+    long shrink_at_percentage; 
     struct hasht_alloc_funcs memfuncs;
 };
 
@@ -274,7 +275,7 @@ static int hasht_change_sz_field(struct hasht *ht, long nbuckets, bool force) {
     (void) force;
     //ignore values that are too small
     nbuckets = nbuckets < HASHT_MIN_TABLESIZE ? HASHT_MIN_TABLESIZE : nbuckets;
-    long nbuckets_po2 = get_adiv_power_idx(nbuckets);
+    long nbuckets_po2 = hasht_get_adiv_power_idx(nbuckets);
     if (nbuckets_po2 < 0)
         return HASHT_INVALID_REQ_SZ; //too big
     HASHT_ASSERT(nbuckets_po2 >= 2 && nbuckets_po2 < adiv_n_values, "adiv failed");
@@ -329,7 +330,7 @@ static bool hasht_dbg_check(struct hasht *ht, long beg_idx, long end_idx, int qu
 static bool hasht_dbg_sanity_01(struct hasht *ht) {
     return ht->tab &&
            ht->nbuckets &&
-           (ht->nbuckets_po2 == get_adiv_power_idx(ht->nbuckets)) &&
+           (ht->nbuckets_po2 == hasht_get_adiv_power_idx(ht->nbuckets)) &&
            (ht->shrink_at_lt_n < ht->grow_at_gt_n) &&
            ht->div_func;
 }
@@ -563,7 +564,7 @@ static int hasht_copy_all_to(struct hasht *destination, struct hasht *source) {
 static int hasht_resize__(struct hasht *ht, long new_element_count) {
 
     long new_bucket_count = hasht_calc_nelements_to_nbuckets(new_element_count, ht->shrink_at_percentage, ht->grow_at_percentage);
-    if (ht->nbuckets_po2 == get_adiv_power_idx(new_bucket_count)) {
+    if (ht->nbuckets_po2 == hasht_get_adiv_power_idx(new_bucket_count)) {
         return HASHT_OK; 
         //because we use primes, for some reason both new value and old values map to the same power of two
         //and there is no point in resizing, since this is an approximate thing it's not a big deal

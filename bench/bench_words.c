@@ -43,11 +43,18 @@ int main(void) {
     printf("insertion time: %f\n", timer_dt(&tm_tmp));
     timer_begin(&tm_tmp);
     xorshf96_srand(0xfeedbeef);
+
+    char keybuff[256];
+    size_t keybuff_sz = 256;
+    const char *keycpy = keybuff;
+
     for (int i=0; i<nwords; i++) {
         int idx = xorshf96() % nwords;
         const char *key = words[idx];
+        assert(strlen(key) < keybuff_sz);
+        strcpy(keybuff, key);
         struct hasht_iter iter;
-        int rv = hasht_find(&ht, &key, &iter);
+        int rv = hasht_find(&ht, &keycpy, &iter);
         assert(rv == HASHT_OK);
         assert(iter.pair->key == key);
         assert(iter.pair->value == idx);
@@ -56,7 +63,10 @@ int main(void) {
     timer_begin(&tm_tmp);
     for (int i=nwords-1; i>=0; i--) {
         const char *key = words[i];
-        int rv = hasht_remove(&ht, &key);
+        assert(strlen(key) < keybuff_sz);
+        strcpy(keybuff, key);
+
+        int rv = hasht_remove(&ht, &keycpy);
         assert(rv == HASHT_OK);
     }
     printf("deletion time:  %f\n", timer_dt(&tm_tmp));

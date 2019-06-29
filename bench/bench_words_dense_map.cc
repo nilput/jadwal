@@ -49,10 +49,17 @@ int main(void) {
     printf("insertion time: %f\n", timer_dt(&tm_tmp));
     timer_begin(&tm_tmp);
     xorshf96_srand(0xfeedbeef);
+
+    char keybuff[256];
+    size_t keybuff_sz = 256;
+    const char *keycpy = keybuff;
+
     for (int i=0; i<nwords; i++) {
         int idx = xorshf96() % nwords;
         const char *key = words[idx];
-        maptype::iterator it = hashtable.find(key);
+        assert(strlen(key) < keybuff_sz);
+        strcpy(keybuff, key);
+        maptype::iterator it = hashtable.find(keycpy);
         assert(it != hashtable.end());
         assert(it->first == key);
         assert(it->second == idx);
@@ -61,7 +68,9 @@ int main(void) {
     timer_begin(&tm_tmp);
     for (int i=nwords-1; i>=0; i--) {
         const char *key = words[i];
-        hashtable.erase(hashtable.find(key));
+        assert(strlen(key) < keybuff_sz);
+        strcpy(keybuff, key);
+        hashtable.erase(hashtable.find(keycpy));
     }
     printf("deletion time:  %f\n", timer_dt(&tm_tmp));
     printf("total time:     %f\n", timer_dt(&tm_init));
