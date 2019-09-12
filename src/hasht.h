@@ -158,7 +158,6 @@ struct hasht_alloc_funcs {
     hasht_malloc_fptr alloc;
     hasht_realloc_fptr realloc;
     hasht_free_fptr free;
-    void *userdata;
 };
 static void *hasht_def_malloc(size_t sz, void *unused_userdata_) {
     (void) unused_userdata_;
@@ -203,10 +202,7 @@ struct hasht {
     long grow_at_percentage; // (divide by 100, for example 0.50 is 50)
     long shrink_at_percentage; 
     struct hasht_alloc_funcs memfuncs;
-
-#ifdef HASHT_DATA_ARG
-    void *udata;
-#endif
+    void *userdata;
 
 };
 
@@ -362,7 +358,7 @@ static int hasht_init_ex(struct hasht *ht,
                         hasht_malloc_fptr alloc,
                         hasht_realloc_fptr realloc,
                         hasht_free_fptr free,
-                        void *alloc_userdata,
+                        void *userdata,
                         long shrink_at_percentage,
                         long grow_at_percentage)
 {
@@ -370,14 +366,12 @@ static int hasht_init_ex(struct hasht *ht,
 #ifdef HASHT_DBG
     memset(ht, 0x3c, sizeof *ht);
 #endif
-    const struct hasht_alloc_funcs memfuncs = { alloc, realloc, free, alloc_userdata, };
+    const struct hasht_alloc_funcs memfuncs = { alloc, realloc, free, };
     ht->memfuncs = memfuncs;
     ht->nelements = 0;
     ht->ndeleted = 0;
     ht->nbuckets_po2 = 0;
-#ifdef HASHT_DATA_ARG
-    ht->udata = NULL;
-#endif
+    ht->userdata = userdata;
 
     rv = hasht_init_parameters(ht, shrink_at_percentage, grow_at_percentage);
     if (rv != HASHT_OK)
@@ -388,7 +382,7 @@ static int hasht_init_ex(struct hasht *ht,
     if (rv != HASHT_OK)
         return rv;
 
-    ht->tab = ht->memfuncs.alloc(sizeof(struct hasht_pair_type) * ht->nbuckets, ht->memfuncs.userdata);
+    ht->tab = ht->memfuncs.alloc(sizeof(struct hasht_pair_type) * ht->nbuckets, ht->userdata);
     if (!ht->tab)
         return HASHT_ALLOC_ERR;
     hasht_memset(ht, 0, ht->nbuckets); //mark everything empty
@@ -405,13 +399,10 @@ static int hasht_init_copy_settings(struct hasht *ht,
                         source->memfuncs.alloc,//hasht_malloc_fptr alloc,
                         source->memfuncs.realloc,//hasht_realloc_fptr realloc,
                         source->memfuncs.free,// hasht_free_fptr free,
-                        source->memfuncs.userdata, //void *alloc_userdata,
+                        source->userdata, //void *userdata,
                         source->shrink_at_percentage, //long shrink_at_percentage,
                         source->grow_at_percentage //long grow_at_percentage)
                         );
-#ifdef HASHT_DATA_ARG
-    ht->udata = source->udata;
-#endif
     return rv;
 }
 
@@ -421,13 +412,13 @@ static int hasht_init(struct hasht *ht, long initial_nelements) {
                         hasht_def_malloc,//hasht_malloc_fptr alloc,
                         hasht_def_realloc,//hasht_realloc_fptr realloc,
                         hasht_def_free,// hasht_free_fptr free,
-                        NULL, //void *alloc_userdata,
+                        NULL, //void *userdata,
                         20, //long shrink_at_percentage,
                         60 //long grow_at_percentage)
                         );
 }
 static void hasht_deinit(struct hasht *ht) {
-    ht->memfuncs.free(ht->tab, ht->memfuncs.userdata);
+    ht->memfuncs.free(ht->tab, ht->userdata);
     ht->tab = NULL;
     hasht_zero_sz_field(ht);
 }
@@ -473,9 +464,9 @@ static int hasht_cmp(struct hasht *ht, hasht_key_type *key1, unsigned int partia
 
 
 #ifdef HASHT_DATA_ARG
-    HASHT_ASSERT(hasht_key_eq_cmp(ht->udata, &pair->key, &pair->key) == 0, "hasht_key_eq_cmp() is broken,"
+    HASHT_ASSERT(hasht_key_eq_cmp(ht->userdata, &pair->key, &pair->key) == 0, "hasht_key_eq_cmp() is broken,"
                                                             " testing it on the same key fails to report it's equal to itself");
-    return hasht_key_eq_cmp(ht->udata, key1, &pair->key);
+    return hasht_key_eq_cmp(ht->userdata, key1, &pair->key);
 #else
     HASHT_ASSERT(hasht_key_eq_cmp(&pair->key, &pair->key) == 0, "hasht_key_eq_cmp() is broken,"
                                                             " testing it on the same key fails to report it's equal to itself");
@@ -490,7 +481,7 @@ static inline int hasht_find_pos__(struct hasht *ht, hasht_key_type *key, long *
     HASHT_ASSERT(out_idx && full_hash_out, "");
 
     #ifdef HASHT_DATA_ARG
-        size_t full_hash = hasht_hash(ht->udata, key);
+        size_t full_hash = hasht_hash(ht->userdata, key);
     #else
         size_t full_hash = hasht_hash(key);
     #endif

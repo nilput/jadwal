@@ -258,7 +258,7 @@ void test_init_add_arrays_find(void) {
     assert(rv == HASHT_OK);
 
 #ifdef HASHT_DATA_ARG
-    ht.udata = mydata;
+    ht.userdata = mydata;
 #endif
 
     int arr1_sz = sizeof values / sizeof values[0];
