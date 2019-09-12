@@ -7,6 +7,24 @@
 typedef int hasht_key_type; 
 typedef int hasht_value_type; 
 
+#ifdef HASHT_DATA_ARG
+int mydata[] = {213123,2313123,664536,3423424,31231231};
+void assert_udata_is_ok(void *udata) {
+    for (int i=0;  i < (int)(sizeof mydata / sizeof mydata[0]); i++) {
+        int *data = (int *) udata;
+        assert(data[i] == mydata[i]);
+    }
+}
+size_t hasht_hash(void *udata, hasht_key_type *key) {
+    assert_udata_is_ok(udata);
+    return *key;
+}
+
+bool hasht_key_eq_cmp(void *udata, hasht_key_type *key_1, hasht_key_type *key_2) {
+    assert_udata_is_ok(udata);
+    return *key_1 == *key_2 ? 0 : 1;
+}
+#else
 size_t hasht_hash(hasht_key_type *key) {
     return *key;
 }
@@ -14,6 +32,7 @@ size_t hasht_hash(hasht_key_type *key) {
 bool hasht_key_eq_cmp(hasht_key_type *key_1, hasht_key_type *key_2) {
     return *key_1 == *key_2 ? 0 : 1;
 }
+#endif
 #include "../src/hasht.h"
 
 /*
@@ -237,6 +256,11 @@ void test_init_add_arrays_find(void) {
     struct hasht ht;
     int rv = hasht_init(&ht, 0);
     assert(rv == HASHT_OK);
+
+#ifdef HASHT_DATA_ARG
+    ht.udata = mydata;
+#endif
+
     int arr1_sz = sizeof values / sizeof values[0];
     int arr2_sz = sizeof values2 / sizeof values2[0];
     test_insert_all_arr2(&ht, values, arr1_sz);

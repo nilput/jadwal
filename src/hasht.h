@@ -30,8 +30,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /*
 needed functions that should be defined before including this: 
-    int hasht_key_eq_cmp(hasht_key_type *key_1, hasht_key_type *key_2) (returns 0 if equal)
+    int    hasht_key_eq_cmp(hasht_key_type *key_1, hasht_key_type *key_2) (returns 0 if equal)
     size_t hasht_hash(hasht_key_type *key)
+
+    #if HASHT_DATA_ARG is defined then the prototypes will be
+    int    hasht_key_eq_cmp(void *udata, hasht_key_type *key_1, hasht_key_type *key_2) (returns 0 if equal)
+    size_t hasht_hash(void *udata, hasht_key_type *key)
+
+    udata is in struct hasht, you're supposed to set it directly when you initialize the hashtable
 needed typedefs: 
      typedef <type> hasht_key_type; 
      typedef <type> hasht_value_type; 
@@ -183,6 +189,7 @@ enum HASHT_ERR {
     HASHT_INVALID_TABLE_STATE = -6, //non recoverable, the only safe operation to do is to call deinit
 };
 
+//Careful with changes!, the struct is migrated to a new one in hasht_resize__
 struct hasht {
     struct hasht_pair_type *tab;
     adiv_fptr div_func; //a pointer to a function that does fast division
@@ -196,6 +203,11 @@ struct hasht {
     long grow_at_percentage; // (divide by 100, for example 0.50 is 50)
     long shrink_at_percentage; 
     struct hasht_alloc_funcs memfuncs;
+
+#ifdef HASHT_DATA_ARG
+    void *udata;
+#endif
+
 };
 
 
@@ -363,6 +375,9 @@ static int hasht_init_ex(struct hasht *ht,
     ht->nelements = 0;
     ht->ndeleted = 0;
     ht->nbuckets_po2 = 0;
+#ifdef HASHT_DATA_ARG
+    ht->udata = NULL;
+#endif
 
     rv = hasht_init_parameters(ht, shrink_at_percentage, grow_at_percentage);
     if (rv != HASHT_OK)
@@ -385,7 +400,7 @@ static int hasht_init_copy_settings(struct hasht *ht,
                         long initial_nelements, 
                         const struct hasht *source)
 {
-    return hasht_init_ex(ht, //struct hasht *ht,
+    int rv =  hasht_init_ex(ht, //struct hasht *ht,
                         initial_nelements, //long initial_nelements, 
                         source->memfuncs.alloc,//hasht_malloc_fptr alloc,
                         source->memfuncs.realloc,//hasht_realloc_fptr realloc,
@@ -394,6 +409,10 @@ static int hasht_init_copy_settings(struct hasht *ht,
                         source->shrink_at_percentage, //long shrink_at_percentage,
                         source->grow_at_percentage //long grow_at_percentage)
                         );
+#ifdef HASHT_DATA_ARG
+    ht->udata = source->udata;
+#endif
+    return rv;
 }
 
 static int hasht_init(struct hasht *ht, long initial_nelements) {
@@ -442,6 +461,8 @@ static long hasht_n_used_buckets(struct hasht *ht) {
     return ht->nelements;
 }
 
+
+
 //returns 0 if equal
 static int hasht_cmp(struct hasht *ht, hasht_key_type *key1, unsigned int partial_hash_1, struct hasht_pair_type *pair) {
     (void) ht;
@@ -450,9 +471,16 @@ static int hasht_cmp(struct hasht *ht, hasht_key_type *key1, unsigned int partia
     if (hasht_pr_get_partial_hash(pair) != partial_hash_1)
         return 1; 
 
-    HASHT_ASSERT(hasht_key_eq_cmp(&pair->key, &pair->key) == 0,
-                                  "hasht_key_eq_cmp() is broken, testing it on the same key fails to report it's equal to itself");
-    return hasht_key_eq_cmp(key1, &pair->key);
+
+#ifdef HASHT_DATA_ARG
+    HASHT_ASSERT(hasht_key_eq_cmp(ht->udata, &pair->key, &pair->key) == 0, "hasht_key_eq_cmp() is broken,"
+                                                            " testing it on the same key fails to report it's equal to itself");
+    return hasht_key_eq_cmp(ht->udata, key1, &pair->key);
+#else
+    HASHT_ASSERT(hasht_key_eq_cmp(&pair->key, &pair->key) == 0, "hasht_key_eq_cmp() is broken,"
+                                                            " testing it on the same key fails to report it's equal to itself");
+    return hasht_key_eq_cmp(           key1, &pair->key);
+#endif
 }
 
 //on successful match, returns HASHT_OK
@@ -460,7 +488,12 @@ static int hasht_cmp(struct hasht *ht, hasht_key_type *key1, unsigned int partia
 //if we have no suggested place then out_idx is set to NOT_FOUND too
 static inline int hasht_find_pos__(struct hasht *ht, hasht_key_type *key, long *out_idx, size_t *full_hash_out) {
     HASHT_ASSERT(out_idx && full_hash_out, "");
-    size_t full_hash = hasht_hash(key);
+
+    #ifdef HASHT_DATA_ARG
+        size_t full_hash = hasht_hash(ht->udata, key);
+    #else
+        size_t full_hash = hasht_hash(key);
+    #endif
     unsigned int partial_hash = hasht_hash_to_partial_hash(full_hash);
     *full_hash_out = full_hash;
     long idx = hasht_integer_mod_buckets(ht, full_hash);
@@ -472,7 +505,7 @@ static inline int hasht_find_pos__(struct hasht *ht, hasht_key_type *key, long *
         return HASHT_INVALID_TABLE_STATE;
     }
 
-    //we can probably use an upper iteration count, in case there is corruption, but we just ignore that here, we assume the user is sane
+    //we can probably use an upper iteration count, in case there is memory corruption, but we just ignore that here, we assume the user is sane
     while (1) {
         struct hasht_pair_type *pair = ht->tab + idx;
         if (hasht_pr_is_occupied(pair)) {
