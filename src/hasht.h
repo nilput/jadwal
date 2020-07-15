@@ -406,17 +406,22 @@ static int hasht_init_copy_settings(struct hasht *ht,
     return rv;
 }
 
-static int hasht_init(struct hasht *ht, long initial_nelements) {
+static int hasht_init_with_udata(struct hasht *ht, long initial_nelements, void *userdata) {
     return hasht_init_ex(ht, //struct hasht *ht,
                         initial_nelements, //long initial_nelements, 
                         hasht_def_malloc,//hasht_malloc_fptr alloc,
                         hasht_def_realloc,//hasht_realloc_fptr realloc,
                         hasht_def_free,// hasht_free_fptr free,
-                        NULL, //void *userdata,
+                        userdata, //void *userdata,
                         20, //long shrink_at_percentage,
                         60 //long grow_at_percentage)
                         );
 }
+
+static int hasht_init(struct hasht *ht, long initial_nelements) {
+    return hasht_init_with_udata(ht, initial_nelements, NULL);
+}
+
 static void hasht_deinit(struct hasht *ht) {
     ht->memfuncs.free(ht->tab, ht->userdata);
     ht->tab = NULL;
