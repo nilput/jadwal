@@ -45,7 +45,7 @@ needed typedefs:
     as an example: key_type can be a string (char *)
                    value_type can be a struct foo; for example
     in this example, the function jadwal_key_cmp would recieve: char **, char **
-                     the function hasht would recieve struct foo *
+                     the function jadwal would recieve struct foo *
                      the same is true for the api's functions, insert() expects (key: char **, value: struct foo *)
                                                                remove() would expect (key: char **)
 */
@@ -347,7 +347,7 @@ static bool jadwal_dbg_sanity_heavy(struct jadwal *ht) {
 }
 
 static void jadwal_memset(struct jadwal *ht, long begin_inc, long end_exc) {
-    JADWAL_ASSERT(jadwal_dbg_sanity_01(ht), "hasht corrupt or not initialized");
+    JADWAL_ASSERT(jadwal_dbg_sanity_01(ht), "jadwal corrupt or not initialized");
     //the flags are designed so that memsetting with 0 means: empty, not deleted, not corrupt
     memset(ht->tab + begin_inc, 0, sizeof(struct jadwal_pair_type) * (end_exc - begin_inc));
     JADWAL_ASSERT(jadwal_dbg_check(ht, begin_inc, end_exc, 1, -1, -1), "");
@@ -656,7 +656,7 @@ static int jadwal_set_pair_at_pos__(struct jadwal *ht, size_t full_hash, jadwal_
 }
 
 static int jadwal_insert__(struct jadwal *ht, jadwal_key_type *key, jadwal_value_type *value, long *found_idx_out, bool or_replace) {
-    JADWAL_ASSERT(jadwal_dbg_sanity_01(ht), "hasht corrupt or not initialized");
+    JADWAL_ASSERT(jadwal_dbg_sanity_01(ht), "jadwal corrupt or not initialized");
     JADWAL_ASSERT(ht->nelements < ht->nbuckets, "");
     JADWAL_ASSERT(found_idx_out, "");
     long found_idx;
