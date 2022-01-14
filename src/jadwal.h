@@ -64,16 +64,23 @@ needed typedefs:
 #include "div_32_funcs.h" //divison functions
 
 
-static int jadwal_get_adiv_power_idx(size_t at_least) {
+static const uint32_t jprimes_n_values = 32;
+static const uint32_t jprimes_values[] = {
+    0LU, 0LU, 2LU, 7LU, 13LU, 23LU, 61LU, 103LU, 251LU, 503LU, 983LU, 1907LU, 3203LU, 
+    6659LU, 16223LU, 25847LU, 56807LU, 100847LU, 224579LU, 443999LU, 854807LU, 1808243LU, 
+    3973787LU, 7759439LU, 16669799LU, 28668287LU, 62923067LU, 118960319LU, 230959907LU, 
+    408026687LU, 994046939LU, 2139408407LU
+};
+
+static int jadwal_get_jprimes_power_idx(size_t at_least) {
     //starts at 2
-    for (int i=2; i < (int)adiv_n_values; i++) {
-        if (adiv_values[i] >= at_least) 
+    for (int i=2; i < (int)jprimes_n_values; i++) {
+        if (jprimes_values[i] >= at_least) 
             return i;
     }
     return -1; //error, must be handled
 }
 
-//#define JADWAL_DBG
 
 #define JADWAL_MIN_TABLESIZE 4
 
@@ -103,10 +110,10 @@ struct jadwal_pair_type {
 };
 
 //pair type functions
-static unsigned char jadwal_pr_flags(struct jadwal_pair_type *prt) {
+static unsigned char jadwal_pair_flags(struct jadwal_pair_type *prt) {
     return prt->pair_data & 0xFF;
 }
-static unsigned int jadwal_pr_get_partial_hash(struct jadwal_pair_type *prt) {
+static unsigned int jadwal_pair_get_partial_hash(struct jadwal_pair_type *prt) {
     const unsigned int upper_24bits = 0xFFFFFF00;
     return prt->pair_data & upper_24bits;
 }
@@ -117,12 +124,12 @@ static unsigned int jadwal_hash_to_partial_hash(size_t full_hash) {
     const unsigned int lower_24bits = 0x00FFFFFF;
     return (full_hash & lower_24bits) << 8;
 }
-static unsigned int jadwal_pr_combine_flags_and_partial_hash(unsigned char flags, unsigned int partial_hash) {
+static unsigned int jadwal_pair_combine_flags_and_partial_hash(unsigned char flags, unsigned int partial_hash) {
     JADWAL_ASSERT((partial_hash & 0xFF) == 0, "invalid partial hash");
     return partial_hash | flags;
 }
-static void jadwal_pr_set_flags(struct jadwal_pair_type *prt, unsigned char flags) {
-    prt->pair_data = jadwal_pr_combine_flags_and_partial_hash(flags, jadwal_pr_get_partial_hash(prt));
+static void jadwal_pair_set_flags(struct jadwal_pair_type *prt, unsigned char flags) {
+    prt->pair_data = jadwal_pair_combine_flags_and_partial_hash(flags, jadwal_pair_get_partial_hash(prt));
 }
 
 
@@ -132,22 +139,22 @@ static void jadwal_pr_set_flags(struct jadwal_pair_type *prt, unsigned char flag
 //     1            0          invalid state
 //     1            1          deleted
 
-static bool jadwal_pr_is_empty(struct jadwal_pair_type *prt) {
-    return (! (jadwal_pr_flags(prt) & JADWAL_VLT_IS_NOT_EMPTY)); //false mean occupied or deleted
+static bool jadwal_pair_is_empty(struct jadwal_pair_type *prt) {
+    return (! (jadwal_pair_flags(prt) & JADWAL_VLT_IS_NOT_EMPTY)); //false mean occupied or deleted
 }
-static bool jadwal_pr_is_corrupt(struct jadwal_pair_type *prt) {
+static bool jadwal_pair_is_corrupt(struct jadwal_pair_type *prt) {
     const unsigned char deleted_and_empty_mask = (JADWAL_VLT_IS_DELETED | JADWAL_VLT_IS_NOT_EMPTY); 
     const unsigned char deleted_and_empty      = (JADWAL_VLT_IS_DELETED | 0); //invalid state
-    return   (jadwal_pr_flags(prt) & JADWAL_VLT_IS_CORRUPT) || 
-             ((jadwal_pr_flags(prt) & deleted_and_empty_mask) == deleted_and_empty);
+    return   (jadwal_pair_flags(prt) & JADWAL_VLT_IS_CORRUPT) || 
+             ((jadwal_pair_flags(prt) & deleted_and_empty_mask) == deleted_and_empty);
 }
-static bool jadwal_pr_is_deleted(struct jadwal_pair_type *prt) {
-    return   (jadwal_pr_flags(prt) & JADWAL_VLT_IS_DELETED); //false means occupied or empty
+static bool jadwal_pair_is_deleted(struct jadwal_pair_type *prt) {
+    return   (jadwal_pair_flags(prt) & JADWAL_VLT_IS_DELETED); //false means occupied or empty
 }
-static bool jadwal_pr_is_occupied(struct jadwal_pair_type *prt) {
+static bool jadwal_pair_is_occupied(struct jadwal_pair_type *prt) {
     //occupied here means an active bucket that contains a value
-    JADWAL_ASSERT(!jadwal_pr_is_corrupt(prt), "corrupt element found");
-    return !jadwal_pr_is_empty(prt) && !jadwal_pr_is_deleted(prt); 
+    JADWAL_ASSERT(!jadwal_pair_is_corrupt(prt), "corrupt element found");
+    return !jadwal_pair_is_empty(prt) && !jadwal_pair_is_deleted(prt); 
 }
 
 typedef void * (*jadwal_malloc_fptr)(size_t sz, void *userdata);
@@ -191,7 +198,6 @@ enum JADWAL_ERR {
 //Careful with changes!, the struct is migrated to a new one in jadwal_resize__
 struct jadwal {
     struct jadwal_pair_type *tab;
-    adiv_fptr div_func; //a pointer to a function that does fast division
 
     long nelements; //number of active buckets (ones that are not empty, and not deleted)
     long ndeleted;
@@ -203,7 +209,6 @@ struct jadwal {
     long shrink_at_percentage; 
     struct jadwal_alloc_funcs memfuncs;
     void *userdata;
-
 };
 
 
@@ -245,7 +250,6 @@ static long jadwal_calc_nelements_to_nbuckets(long needed_nelements, long shrink
     //ratio > shrink_percent AND ratio < grow_percent
     //pick any ratio between the two: r1 = (shrink_percent + grow_percent) / 2
     //x would be = needed_elements / r1
-    //
     //since we store percentages as ints implictly a fraction of 100, r1 = some_integer / 100
     //x = needed_nelements * (100 / some_integer)
     //x = needed_nelements * 100 / some_integer
@@ -283,30 +287,18 @@ static int jadwal_change_sz_field(struct jadwal *ht, long nbuckets, bool force) 
     (void) force;
     //ignore values that are too small
     nbuckets = nbuckets < JADWAL_MIN_TABLESIZE ? JADWAL_MIN_TABLESIZE : nbuckets;
-    long nbuckets_po2 = jadwal_get_adiv_power_idx(nbuckets);
+    long nbuckets_po2 = jadwal_get_jprimes_power_idx(nbuckets);
     if (nbuckets_po2 < 0)
         return JADWAL_INVALID_REQ_SZ; //too big
-    JADWAL_ASSERT(nbuckets_po2 >= 2 && nbuckets_po2 < adiv_n_values, "adiv failed");
-    long nbuckets_prime = adiv_values[nbuckets_po2];
+    JADWAL_ASSERT(nbuckets_po2 >= 2 && nbuckets_po2 < jprimes_n_values, "jprimes failed");
+    long nbuckets_prime = jprimes_values[nbuckets_po2];
     ht->nbuckets     = nbuckets_prime;
     ht->nbuckets_po2 = nbuckets_po2;
-    ht->div_func = adiv_funcs[ht->nbuckets_po2];
-    JADWAL_ASSERT(ht->div_func, "invalid adiv fptr");
-
-#ifdef JADWAL_DBG
-    long rnd = rand();
-    JADWAL_ASSERT(ht->div_func(rnd) == rnd % ht->nbuckets, "adiv failed");
-#endif// JADWAL_DBG
     
     JADWAL_ASSERT(ht->shrink_at_percentage > 0 && ht->grow_at_percentage > ht->shrink_at_percentage, "invalid growth parameters");
     //update cached result of division
     jadwal_set_parameters(ht, ht->shrink_at_percentage, ht->grow_at_percentage);
     return JADWAL_OK;
-}
-static void jadwal_zero_sz_field(struct jadwal *ht) {
-    ht->nbuckets = 0;
-    ht->nbuckets_po2 = 0;
-    ht->div_func = NULL;
 }
 
 //tries to find memory corruption
@@ -323,9 +315,9 @@ static bool jadwal_dbg_check(struct jadwal *ht, long beg_idx, long end_idx, int 
             query_corrupt, 
         };
         int found[3] = { 
-            jadwal_pr_is_empty(pair),
-            jadwal_pr_is_deleted(pair),
-            jadwal_pr_is_corrupt(pair),
+            jadwal_pair_is_empty(pair),
+            jadwal_pair_is_deleted(pair),
+            jadwal_pair_is_corrupt(pair),
         };
         for (int i=0; i<3; i++) {
             if (((expect[i] > 0) && !found[i]) || ((expect[i] < 0) && found[i]))
@@ -338,9 +330,8 @@ static bool jadwal_dbg_check(struct jadwal *ht, long beg_idx, long end_idx, int 
 static bool jadwal_dbg_sanity_01(struct jadwal *ht) {
     return ht->tab &&
            ht->nbuckets &&
-           (ht->nbuckets_po2 == jadwal_get_adiv_power_idx(ht->nbuckets)) &&
-           (ht->shrink_at_lt_n < ht->grow_at_gt_n) &&
-           ht->div_func;
+           (ht->nbuckets_po2 == jadwal_get_jprimes_power_idx(ht->nbuckets)) &&
+           (ht->shrink_at_lt_n < ht->grow_at_gt_n);
 }
 static bool jadwal_dbg_sanity_heavy(struct jadwal *ht) {
     return jadwal_dbg_sanity_01(ht) && jadwal_dbg_check(ht, 0, ht->nbuckets, 0, 0, -1);
@@ -425,10 +416,11 @@ static int jadwal_init(struct jadwal *ht, long initial_nelements) {
 static void jadwal_deinit(struct jadwal *ht) {
     ht->memfuncs.free(ht->tab, ht->userdata);
     ht->tab = NULL;
-    jadwal_zero_sz_field(ht);
+    ht->nbuckets = 0;
+    ht->nbuckets_po2 = 0;
 }
 static long jadwal_integer_mod_buckets(struct jadwal *ht, size_t full_hash) {
-    long divd_hash = ht->div_func(full_hash); //fast division (% not division) by hardcoded primes
+    long divd_hash = full_hash % jprimes_values[ht->nbuckets_po2];
     JADWAL_ASSERT(divd_hash < ht->nbuckets, "");
     return divd_hash;
 }
@@ -457,14 +449,12 @@ static long jadwal_n_used_buckets(struct jadwal *ht) {
     return ht->nelements;
 }
 
-
-
 //returns 0 if equal
 static int jadwal_cmp(struct jadwal *ht, jadwal_key_type *key1, unsigned int partial_hash_1, struct jadwal_pair_type *pair) {
     (void) ht;
 
     //skip full key comparison
-    if (jadwal_pr_get_partial_hash(pair) != partial_hash_1)
+    if (jadwal_pair_get_partial_hash(pair) != partial_hash_1)
         return 1; 
 
 
@@ -504,17 +494,17 @@ static inline int jadwal_find_pos__(struct jadwal *ht, jadwal_key_type *key, lon
     //we can probably use an upper iteration count, in case there is memory corruption, but we just ignore that here, we assume the user is sane
     while (1) {
         struct jadwal_pair_type *pair = ht->tab + idx;
-        if (jadwal_pr_is_occupied(pair)) {
+        if (jadwal_pair_is_occupied(pair)) {
             if (jadwal_cmp(ht, key, partial_hash, pair) == 0) {
                 *out_idx = idx;
                 return JADWAL_OK; //found
             }
         }
-        else if (jadwal_pr_is_deleted(pair)) {
+        else if (jadwal_pair_is_deleted(pair)) {
             if (suggested == JADWAL_NOT_FOUND)
                 suggested = idx; 
         }
-        else if (jadwal_pr_is_empty(pair)) {
+        else if (jadwal_pair_is_empty(pair)) {
             if (suggested == JADWAL_NOT_FOUND)
                 suggested = idx;
             *out_idx = suggested;
@@ -564,7 +554,7 @@ static long jadwal_skip_to_next__(struct jadwal *ht, long start_idx, long cursor
     JADWAL_ASSERT(start_idx >= 0  &&  start_idx < ht->nbuckets, "");
     for (long i=0; i<ht->nbuckets; i++) {
         struct jadwal_pair_type *pair = ht->tab + cursor_idx;
-        if (jadwal_pr_is_occupied(pair)) {
+        if (jadwal_pair_is_occupied(pair)) {
             return cursor_idx;
         }
         cursor_idx = jadwal_idx_mod_buckets(ht, cursor_idx + 1); 
@@ -593,7 +583,7 @@ static int jadwal_copy_all_to(struct jadwal *destination, struct jadwal *source)
 static int jadwal_resize__(struct jadwal *ht, long new_element_count) {
 
     long new_bucket_count = jadwal_calc_nelements_to_nbuckets(new_element_count, ht->shrink_at_percentage, ht->grow_at_percentage);
-    if (ht->nbuckets_po2 == jadwal_get_adiv_power_idx(new_bucket_count)) {
+    if (ht->nbuckets_po2 == jadwal_get_jprimes_power_idx(new_bucket_count)) {
         return JADWAL_OK; 
         //because we use primes, for some reason both new value and old values map to the same power of two
         //and there is no point in resizing, since this is an approximate thing it's not a big deal
@@ -648,7 +638,7 @@ static int jadwal_set_pair_at_pos__(struct jadwal *ht, size_t full_hash, jadwal_
     JADWAL_ASSERT(ht->nelements < ht->nbuckets, "");
     JADWAL_ASSERT(place_to_insert_idx >= 0 && place_to_insert_idx < ht->nbuckets , "");
     struct jadwal_pair_type *pair = ht->tab + place_to_insert_idx;
-    pair->pair_data = jadwal_pr_combine_flags_and_partial_hash(JADWAL_VLT_IS_NOT_EMPTY, //flags
+    pair->pair_data = jadwal_pair_combine_flags_and_partial_hash(JADWAL_VLT_IS_NOT_EMPTY, //flags
                                                         jadwal_hash_to_partial_hash(full_hash));
     memcpy(&pair->key, key, sizeof *key);
     memcpy(&pair->value, value, sizeof *value);
@@ -688,7 +678,7 @@ static int jadwal_insert__(struct jadwal *ht, jadwal_key_type *key, jadwal_value
     else if (rv == JADWAL_NOT_FOUND) {
         //not a duplicate, new element
         struct jadwal_pair_type *pair = ht->tab + found_idx; 
-        if (jadwal_pr_is_deleted(pair)) {
+        if (jadwal_pair_is_deleted(pair)) {
             JADWAL_ASSERT(ht->ndeleted > 0, "found a deleted element even though ht->ndeleted <= 0");
             ht->ndeleted--;
         }
@@ -714,24 +704,24 @@ static int jadwal_insert__(struct jadwal *ht, jadwal_key_type *key, jadwal_value
 //                    ^^^mark as deleted^^^^     ^next^
 static void jadwal_mark_as_empty__(struct jadwal *ht, long at_index) {
     struct jadwal_pair_type *pair = ht->tab + at_index; 
-    JADWAL_ASSERT(!jadwal_pr_is_empty(pair), "");
-    jadwal_pr_set_flags(pair,
-                  (jadwal_pr_flags(pair) & (~ (JADWAL_VLT_IS_NOT_EMPTY | JADWAL_VLT_IS_DELETED))));
-    JADWAL_ASSERT(jadwal_pr_is_empty(pair), "");
+    JADWAL_ASSERT(!jadwal_pair_is_empty(pair), "");
+    jadwal_pair_set_flags(pair,
+                  (jadwal_pair_flags(pair) & (~ (JADWAL_VLT_IS_NOT_EMPTY | JADWAL_VLT_IS_DELETED))));
+    JADWAL_ASSERT(jadwal_pair_is_empty(pair), "");
 }
 static void jadwal_mark_as_occupied__(struct jadwal *ht, long at_index) {
     struct jadwal_pair_type *pair = ht->tab + at_index; 
-    JADWAL_ASSERT(jadwal_pr_is_empty(pair) || jadwal_pr_is_deleted(pair), "");
-    jadwal_pr_set_flags(pair,
-                  (jadwal_pr_flags(pair) & (~JADWAL_VLT_IS_DELETED)) | JADWAL_VLT_IS_NOT_EMPTY);
-    JADWAL_ASSERT(!jadwal_pr_is_empty(pair), "");
+    JADWAL_ASSERT(jadwal_pair_is_empty(pair) || jadwal_pair_is_deleted(pair), "");
+    jadwal_pair_set_flags(pair,
+                  (jadwal_pair_flags(pair) & (~JADWAL_VLT_IS_DELETED)) | JADWAL_VLT_IS_NOT_EMPTY);
+    JADWAL_ASSERT(!jadwal_pair_is_empty(pair), "");
 }
 static void jadwal_mark_as_deleted__(struct jadwal *ht, long at_index) {
     struct jadwal_pair_type *pair = ht->tab + at_index; 
-    JADWAL_ASSERT(jadwal_pr_is_occupied(pair), "trying to delete an empty element");
-    jadwal_pr_set_flags(pair,
-                  jadwal_pr_flags(pair) | JADWAL_VLT_IS_DELETED);
-    JADWAL_ASSERT(jadwal_pr_is_deleted(pair), "");
+    JADWAL_ASSERT(jadwal_pair_is_occupied(pair), "trying to delete an empty element");
+    jadwal_pair_set_flags(pair,
+                  jadwal_pair_flags(pair) | JADWAL_VLT_IS_DELETED);
+    JADWAL_ASSERT(jadwal_pair_is_deleted(pair), "");
 }
 
 static int jadwal_remove(struct jadwal *ht, jadwal_key_type *key) {
@@ -748,7 +738,7 @@ static int jadwal_remove(struct jadwal *ht, jadwal_key_type *key) {
     JADWAL_ASSERT(found_idx >= 0 && found_idx < ht->nbuckets, "find pos returned invalid index");
 #ifdef JADWAL_DBG
         struct jadwal_pair_type *pair = ht->tab + found_idx;
-        JADWAL_ASSERT(jadwal_pr_is_occupied(pair), "find pos returned an index of a deleted/empty element");
+        JADWAL_ASSERT(jadwal_pair_is_occupied(pair), "find pos returned an index of a deleted/empty element");
 #endif // JADWAL_DBG
 
     //optimization: if next element is empty, mark our element as empty too, otherwise mark our element as deleted
@@ -758,7 +748,7 @@ static int jadwal_remove(struct jadwal *ht, jadwal_key_type *key) {
     //TODO, division even though it is fast can be optimized to be a branch in wrap around cases
     //After benchmarking this, the results were: cleaning up in general made things faster by 2.0%
     //JADWAL_AGRESSIVE_CLEANUP made things faster by about 0.5% (which is insignificant)
-    if (jadwal_pr_is_empty(next_pair)) {
+    if (jadwal_pair_is_empty(next_pair)) {
         jadwal_mark_as_empty__(ht, found_idx);
 
         //^TODO: add tests that extensively test the table state after lots of deletions
@@ -783,9 +773,9 @@ static int jadwal_remove(struct jadwal *ht, jadwal_key_type *key) {
         #ifdef JADWAL_AGRESSIVE_CLEANUP
             long prev_idx = jadwal_idx_mod_buckets(ht, found_idx - 1);
             struct jadwal_pair_type *prev_pair = ht->tab + prev_idx;
-            while (jadwal_pr_is_deleted(prev_pair)) {
+            while (jadwal_pair_is_deleted(prev_pair)) {
                 jadwal_mark_as_empty__(ht, prev_idx);
-                JADWAL_ASSERT(jadwal_pr_is_empty(prev_pair), "");
+                JADWAL_ASSERT(jadwal_pair_is_empty(prev_pair), "");
                 prev_idx = jadwal_idx_mod_buckets(ht, prev_idx - 1); 
                 prev_pair = ht->tab + prev_idx;
             }
@@ -796,9 +786,9 @@ static int jadwal_remove(struct jadwal *ht, jadwal_key_type *key) {
                 probe_len = probe_len + ht->nbuckets;
             long prev_idx = jadwal_idx_mod_buckets(ht, found_idx - 1);
             struct jadwal_pair_type *prev_pair = ht->tab + prev_idx;
-            for (long i = 0; i < probe_len && jadwal_pr_is_deleted(prev_pair); i++) {
+            for (long i = 0; i < probe_len && jadwal_pair_is_deleted(prev_pair); i++) {
                 jadwal_mark_as_empty__(ht, prev_idx);
-                JADWAL_ASSERT(jadwal_pr_is_empty(prev_pair), "");
+                JADWAL_ASSERT(jadwal_pair_is_empty(prev_pair), "");
                 prev_idx = jadwal_idx_mod_buckets(ht, prev_idx - 1); 
                 prev_pair = ht->tab + prev_idx;
             }

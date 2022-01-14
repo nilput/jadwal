@@ -33,7 +33,7 @@ bool jadwal_key_eq_cmp(jadwal_key_type *key_1, jadwal_key_type *key_2) {
     return *key_1 == *key_2 ? 0 : 1;
 }
 #endif
-#include "../src/hasht.h"
+#include "../src/jadwal.h"
 
 /*
 vals=set()
