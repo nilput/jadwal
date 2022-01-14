@@ -5,8 +5,8 @@ targets: bench
 
 #to cause bench_words_O0 to be built for example, add bench_words_O0 to bench: ...
 bench: bench_words_O2_NDEBUG bench_sentence_O2_NDEBUG
-O0 := -O0 -g3 -fsanitize=address,undefined -DHASHT_DBG
-O2 :=  -O2 -DHASHT_DBG
+O0 := -O0 -g3 -fsanitize=address,undefined -DJADWAL_DBG
+O2 :=  -O2 -DJADWAL_DBG
 O2_NDEBUG := -O2 #no assertions (other than the ones in bench_words.c)
 
 %_O0 : %.c

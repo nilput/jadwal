@@ -8,28 +8,28 @@
 #include "util.h" //fast rand, timer
 
 
-typedef const char * hasht_key_type; 
-typedef int hasht_value_type; 
+typedef const char * jadwal_key_type; 
+typedef int jadwal_value_type; 
 
-static size_t hasht_hash(hasht_key_type *key) {
+static size_t jadwal_hash(jadwal_key_type *key) {
     //key is passed as const char **
     return SuperFastHash(*key, strlen(*key));
 }
 
 //must return zero when equal
-static int hasht_key_eq_cmp(hasht_key_type *key_1, hasht_key_type *key_2) {
+static int jadwal_key_eq_cmp(jadwal_key_type *key_1, jadwal_key_type *key_2) {
     //we are passed const char **
     if (*key_1 == *key_2)
         return 0; //equal
     return strcmp(*key_1, *key_2);
 }
 
-#include "../src/hasht.h"
+#include "../src/jadwal.h"
 
 int main(void) {
-    struct hasht ht;
-    int rv = hasht_init(&ht, 0);
-    assert(rv == HASHT_OK);
+    struct jadwal ht;
+    int rv = jadwal_init(&ht, 0);
+    assert(rv == JADWAL_OK);
 
     struct timer_info tm_init;
     struct timer_info tm_tmp;
@@ -37,8 +37,8 @@ int main(void) {
     timer_begin(&tm_tmp);
 
     for (int i=0; i<nwords; i++) {
-        int rv = hasht_insert(&ht, &words[i], &i);
-        assert(rv == HASHT_OK);
+        int rv = jadwal_insert(&ht, &words[i], &i);
+        assert(rv == JADWAL_OK);
     }
     printf("insertion time: %f\n", timer_dt(&tm_tmp));
     timer_begin(&tm_tmp);
@@ -53,9 +53,9 @@ int main(void) {
         const char *key = words[idx];
         assert(strlen(key) < keybuff_sz);
         strcpy(keybuff, key);
-        struct hasht_iter iter;
-        int rv = hasht_find(&ht, &keycpy, &iter);
-        assert(rv == HASHT_OK);
+        struct jadwal_iter iter;
+        int rv = jadwal_find(&ht, &keycpy, &iter);
+        assert(rv == JADWAL_OK);
         assert(iter.pair->key == key);
         assert(iter.pair->value == idx);
     }
@@ -66,12 +66,12 @@ int main(void) {
         assert(strlen(key) < keybuff_sz);
         strcpy(keybuff, key);
 
-        int rv = hasht_remove(&ht, &keycpy);
-        assert(rv == HASHT_OK);
+        int rv = jadwal_remove(&ht, &keycpy);
+        assert(rv == JADWAL_OK);
     }
     printf("deletion time:  %f\n", timer_dt(&tm_tmp));
     printf("total time:     %f\n", timer_dt(&tm_init));
     printf("success\n");
-    hasht_deinit(&ht);
+    jadwal_deinit(&ht);
 }
 

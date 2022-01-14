@@ -1,17 +1,17 @@
 #!/bin/bash
 SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-INPUT_HEADER="$SCRIPTDIR/../src/hasht.h"
+INPUT_HEADER="$SCRIPTDIR/../src/jadwal.h"
 EXTRA_HEADER="$SCRIPTDIR/../src/div_32_funcs.h"
 help 
 if [ $# -lt 2 ]; then
     echo "error, script usage:\
-./gen_hasht [prefix] [output_header_name]" >&2;
+./gen_jadwal [prefix] [output_header_name]" >&2;
 fi
 generate_header() {
     prefix="$1"
     prefix_uppercase="$(awk '{print toupper($0)}' <<< "$prefix")"
     output_header="$2"
-    sed "s/hasht/${prefix}/g; s/HASHT/$prefix_uppercase/g" \
+    sed "s/jadwal/${prefix}/g; s/JADWAL/$prefix_uppercase/g" \
          "$INPUT_HEADER"  \
          > "$output_header" || { printf "Error when trying to substitute: '$prefix'" >&2; exit 1; }
 }

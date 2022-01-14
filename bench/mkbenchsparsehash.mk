@@ -1,6 +1,6 @@
 #CXXFLAGS := -O0 -g3 -Wall -Wextra
-CXXFLAGS := -O2 -Wall -Wextra
+CXXFLAGS := -O2 -Wall -Wextra -Isparsehash/src
 .PHONY: all clean
-all: bench/bench_words_dense_map bench/bench_sentence_dense_map
+all: bench_words_dense_map bench_sentence_dense_map
 clean: 
-	rm bench/bench_words_dense_map bench/bench_sentence_dense_map
+	rm bench_words_dense_map bench_sentence_dense_map

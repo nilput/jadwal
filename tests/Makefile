@@ -3,17 +3,17 @@ all: targets
 
 targets: run_tests
 
-TESTS :=  hasht_test_O0 hasht_test_O2 hasht_test_O3 hasht_test_O2_NDEBUG hasht_test_udata_O0
+TESTS :=  jadwal_test_O0 jadwal_test_O2 jadwal_test_O3 jadwal_test_O2_NDEBUG jadwal_test_udata_O0
 run_tests: $(TESTS)
 	for prg in $^; do \
 		./"$$prg" || exit 1; \
 	done
 
-hasht_test_O0: CFLAGS += -O0 -g3 -fsanitize=address,undefined -DHASHT_DBG
-hasht_test_O2: CFLAGS += -O2 -DHASHT_DBG
-hasht_test_O2_NDEBUG: CFLAGS += -O2 #no assertions
-hasht_test_O3: CFLAGS += -O3 -DHASHT_DBG 
-hasht_test_udata_O0: CFLAGS += -O0 -g3 -fsanitize=address,undefined -DHASHT_DBG -DHASHT_DATA_ARG
+jadwal_test_O0: CFLAGS += -O0 -g3 -fsanitize=address,undefined -DJADWAL_DBG
+jadwal_test_O2: CFLAGS += -O2 -DJADWAL_DBG
+jadwal_test_O2_NDEBUG: CFLAGS += -O2 #no assertions
+jadwal_test_O3: CFLAGS += -O3 -DJADWAL_DBG 
+jadwal_test_udata_O0: CFLAGS += -O0 -g3 -fsanitize=address,undefined -DJADWAL_DBG -DJADWAL_DATA_ARG
 
 %_O0 : %.c
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LDLIBS)

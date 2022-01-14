@@ -1,13 +1,13 @@
-//must define this in build system, otherwise the tests are useless #define HASHT_DBG
+//must define this in build system, otherwise the tests are useless #define JADWAL_DBG
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <assert.h>
-typedef int hasht_key_type; 
-typedef int hasht_value_type; 
+typedef int jadwal_key_type; 
+typedef int jadwal_value_type; 
 
-#ifdef HASHT_DATA_ARG
+#ifdef JADWAL_DATA_ARG
 int mydata[] = {213123,2313123,664536,3423424,31231231};
 void assert_udata_is_ok(void *udata) {
     for (int i=0;  i < (int)(sizeof mydata / sizeof mydata[0]); i++) {
@@ -15,21 +15,21 @@ void assert_udata_is_ok(void *udata) {
         assert(data[i] == mydata[i]);
     }
 }
-size_t hasht_hash(void *udata, hasht_key_type *key) {
+size_t jadwal_hash(void *udata, jadwal_key_type *key) {
     assert_udata_is_ok(udata);
     return *key;
 }
 
-bool hasht_key_eq_cmp(void *udata, hasht_key_type *key_1, hasht_key_type *key_2) {
+bool jadwal_key_eq_cmp(void *udata, jadwal_key_type *key_1, jadwal_key_type *key_2) {
     assert_udata_is_ok(udata);
     return *key_1 == *key_2 ? 0 : 1;
 }
 #else
-size_t hasht_hash(hasht_key_type *key) {
+size_t jadwal_hash(jadwal_key_type *key) {
     return *key;
 }
 
-bool hasht_key_eq_cmp(hasht_key_type *key_1, hasht_key_type *key_2) {
+bool jadwal_key_eq_cmp(jadwal_key_type *key_1, jadwal_key_type *key_2) {
     return *key_1 == *key_2 ? 0 : 1;
 }
 #endif
@@ -162,35 +162,35 @@ void *xmalloc(size_t sz) {
         assert(0);
     return m;
 }
-void test_insert_all_arr2(struct hasht *ht, int arr[][2], int nelems) {
+void test_insert_all_arr2(struct jadwal *ht, int arr[][2], int nelems) {
     for (int i=0; i<nelems; i++) {
-        int rv = hasht_insert(ht, &arr[i][0], &arr[i][1]);
-        assert(rv == HASHT_OK);
+        int rv = jadwal_insert(ht, &arr[i][0], &arr[i][1]);
+        assert(rv == JADWAL_OK);
     }
 }
-void test_insert_all_arr2_expect_duplicate(struct hasht *ht, int arr[][2], int nelems) {
+void test_insert_all_arr2_expect_duplicate(struct jadwal *ht, int arr[][2], int nelems) {
     for (int i=0; i<nelems; i++) {
-        int rv = hasht_insert(ht, &arr[i][0], &arr[i][1]);
-        assert(rv == HASHT_DUPLICATE_KEY);
+        int rv = jadwal_insert(ht, &arr[i][0], &arr[i][1]);
+        assert(rv == JADWAL_DUPLICATE_KEY);
     }
 }
-void test_delete_all_arr2(struct hasht *ht, int arr[][2], int nelems) {
+void test_delete_all_arr2(struct jadwal *ht, int arr[][2], int nelems) {
     for (int i=0; i<nelems; i++) {
-        int rv = hasht_remove(ht, &arr[i][0]);
-        assert(rv == HASHT_OK);
+        int rv = jadwal_remove(ht, &arr[i][0]);
+        assert(rv == JADWAL_OK);
     }
 }
-void test_delete_all_arr2_expect_not_found(struct hasht *ht, int arr[][2], int nelems) {
+void test_delete_all_arr2_expect_not_found(struct jadwal *ht, int arr[][2], int nelems) {
     for (int i=0; i<nelems; i++) {
-        int rv = hasht_remove(ht, &arr[i][0]);
-        assert(rv == HASHT_NOT_FOUND);
+        int rv = jadwal_remove(ht, &arr[i][0]);
+        assert(rv == JADWAL_NOT_FOUND);
     }
 }
-void test_find_all_arr2(struct hasht *ht, int arr[][2], int nelems) {
+void test_find_all_arr2(struct jadwal *ht, int arr[][2], int nelems) {
     for (int i=0; i<nelems; i++) {
-        struct hasht_iter iter;
-        int rv = hasht_find(ht, &arr[i][0], &iter);
-        assert(rv == HASHT_OK);
+        struct jadwal_iter iter;
+        int rv = jadwal_find(ht, &arr[i][0], &iter);
+        assert(rv == JADWAL_OK);
         assert(iter.pair);
         assert(iter.pair->key == arr[i][0]);
         assert(iter.pair->value == arr[i][1]);
@@ -210,13 +210,13 @@ long xlinear_find(int arr[][2], int nelems, long key) {
     return idx;
 }
 
-void test_iter_expect_seen(struct hasht *ht, int arr[][2], int nelems, long expected_len) {
+void test_iter_expect_seen(struct jadwal *ht, int arr[][2], int nelems, long expected_len) {
     bool *seen = xmalloc(sizeof(bool) * nelems);
     memset(seen, 0, sizeof(bool) * nelems);
-    struct hasht_iter iter;
-    hasht_begin_iterator(ht, &iter);
+    struct jadwal_iter iter;
+    jadwal_begin_iterator(ht, &iter);
     long len = 0;
-    for (; hasht_iter_check(&iter); hasht_iter_next(ht, &iter)) {
+    for (; jadwal_iter_check(&iter); jadwal_iter_next(ht, &iter)) {
         assert(iter.pair);
         bool *seen_entry = seen + xlinear_find(arr, nelems, iter.pair->key);
         assert(!*seen_entry);
@@ -234,30 +234,30 @@ void test_iter_expect_seen(struct hasht *ht, int arr[][2], int nelems, long expe
     free(seen);
 }
 
-void test_iter_expect_count(struct hasht *ht, long expected_len) {
-    struct hasht_iter iter;
-    hasht_begin_iterator(ht, &iter);
+void test_iter_expect_count(struct jadwal *ht, long expected_len) {
+    struct jadwal_iter iter;
+    jadwal_begin_iterator(ht, &iter);
     long len = 0;
-    for (; hasht_iter_check(&iter); hasht_iter_next(ht, &iter)) {
+    for (; jadwal_iter_check(&iter); jadwal_iter_next(ht, &iter)) {
         assert(iter.pair);
         len++;
     }
     assert(len == expected_len);
 }
 
-void test_find_all_arr2_expect_not_found(struct hasht *ht, int arr[][2], int nelems) {
+void test_find_all_arr2_expect_not_found(struct jadwal *ht, int arr[][2], int nelems) {
     for (int i=0; i<nelems; i++) {
-        struct hasht_iter iter;
-        int rv = hasht_find(ht, &arr[i][0], &iter);
-        assert(rv == HASHT_NOT_FOUND);
+        struct jadwal_iter iter;
+        int rv = jadwal_find(ht, &arr[i][0], &iter);
+        assert(rv == JADWAL_NOT_FOUND);
     }
 }
 void test_init_add_arrays_find(void) {
-    struct hasht ht;
-    int rv = hasht_init(&ht, 0);
-    assert(rv == HASHT_OK);
+    struct jadwal ht;
+    int rv = jadwal_init(&ht, 0);
+    assert(rv == JADWAL_OK);
 
-#ifdef HASHT_DATA_ARG
+#ifdef JADWAL_DATA_ARG
     ht.userdata = mydata;
 #endif
 
@@ -285,7 +285,7 @@ void test_init_add_arrays_find(void) {
     test_find_all_arr2(&ht, values, arr1_sz);
 
     test_find_all_arr2(&ht, values, arr1_sz);
-    hasht_deinit(&ht);
+    jadwal_deinit(&ht);
 }
 
 int main(void) {

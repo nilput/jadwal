@@ -25,23 +25,23 @@
 #include "util.h" //fast rand, timer
 
 
-typedef const char * hasht_key_type; 
-typedef char * hasht_value_type; 
+typedef const char * jadwal_key_type; 
+typedef char * jadwal_value_type; 
 
-static size_t hasht_hash(hasht_key_type *key) {
+static size_t jadwal_hash(jadwal_key_type *key) {
     //key is passed as const char **
     return SuperFastHash(*key, strlen(*key));
 }
 
 //must return zero when equal
-static int hasht_key_eq_cmp(hasht_key_type *key_1, hasht_key_type *key_2) {
+static int jadwal_key_eq_cmp(jadwal_key_type *key_1, jadwal_key_type *key_2) {
     //we are passed const char **
     if (*key_1 == *key_2)
         return 0; //equal
     return strcmp(*key_1, *key_2);
 }
 
-#include "../src/hasht.h"
+#include "../src/jadwal.h"
 
 void assertx(int cond) {
     if (!cond) {
@@ -64,9 +64,9 @@ void sep_word(const char *sentence, const char **word2) {
 }
 
 int main(void) {
-    struct hasht ht;
-    int rv = hasht_init(&ht, 0);
-    assert(rv == HASHT_OK);
+    struct jadwal ht;
+    int rv = jadwal_init(&ht, 0);
+    assert(rv == JADWAL_OK);
 
     struct timer_info tm_init;
     struct timer_info tm_tmp;
@@ -99,18 +99,18 @@ int main(void) {
             sentence_cur++;
         }
         assert((int)strlen(sentence) == sentence_len - 1);
-        int rv = hasht_insert(&ht, &word, &sentence);
-        assert(rv == HASHT_OK);
+        int rv = jadwal_insert(&ht, &word, &sentence);
+        assert(rv == JADWAL_OK);
     }
     printf("insertion time: %f\n", timer_dt(&tm_tmp));
     timer_begin(&tm_tmp);
 
     for (int i=0; i<nwords; i++) {
-        struct hasht_iter iter;
+        struct jadwal_iter iter;
         const char *word = words[i];
-        int rv = hasht_find(&ht, &word, &iter);
-        if (rv != HASHT_OK) {
-            assert(rv == HASHT_NOT_FOUND);
+        int rv = jadwal_find(&ht, &word, &iter);
+        if (rv != JADWAL_OK) {
+            assert(rv == JADWAL_NOT_FOUND);
             continue;
         }
         assert(iter.pair);
@@ -120,16 +120,16 @@ int main(void) {
         for (int j=0; j<2; j++) {
             sep_word(next_word, &next_word);
             assert(next_word);
-            struct hasht_iter it;
-            int rv = hasht_find(&ht, &next_word, &it);
-            if (rv != HASHT_OK) {
-                assert(rv == HASHT_NOT_FOUND);
+            struct jadwal_iter it;
+            int rv = jadwal_find(&ht, &next_word, &it);
+            if (rv != JADWAL_OK) {
+                assert(rv == JADWAL_NOT_FOUND);
                 continue;
             }
             assert(it.pair->value);
             free(it.pair->value);
-            rv = hasht_remove(&ht, &next_word);
-            assert(rv == HASHT_OK);
+            rv = jadwal_remove(&ht, &next_word);
+            assert(rv == JADWAL_OK);
         }
     }
     printf("filtering time: %f\n", timer_dt(&tm_tmp));
@@ -139,11 +139,11 @@ int main(void) {
     assert(fout);
     
     for (int i=0; i<nwords; i++) {
-        struct hasht_iter iter;
+        struct jadwal_iter iter;
         const char *word = words[i];
-        int rv = hasht_find(&ht, &word, &iter);
-        if (rv != HASHT_OK) {
-            assert(rv == HASHT_NOT_FOUND);
+        int rv = jadwal_find(&ht, &word, &iter);
+        if (rv != JADWAL_OK) {
+            assert(rv == JADWAL_NOT_FOUND);
             continue;
         }
         assert(iter.pair);
@@ -159,5 +159,5 @@ int main(void) {
     printf("output time: %f\n", timer_dt(&tm_tmp));
     printf("total time:     %f\n", timer_dt(&tm_init));
     printf("success\n");
-    hasht_deinit(&ht);
+    jadwal_deinit(&ht);
 }
